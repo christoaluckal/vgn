@@ -111,7 +111,10 @@ class TSDFVolume(object):
         grid = np.zeros((1, 40, 40, 40), dtype=np.float32)
         for idx, point in enumerate(points):
             i, j, k = np.floor(point / self.voxel_size).astype(int)
-            grid[0, i, j, k] = distances[idx]
+            try:
+                grid[0, i, j, k] = distances[idx]
+            except:
+                pass
         return grid
 
     def get_cloud(self):
