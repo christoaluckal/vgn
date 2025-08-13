@@ -10,12 +10,110 @@ from vgn import io, vis
 from vgn.grasp import *
 from vgn.simulation import ClutterRemovalSim
 from vgn.utils.transform import Rotation, Transform
+import open3d as o3d
 
 MAX_CONSECUTIVE_FAILURES = 2
-
+import random
 
 State = collections.namedtuple("State", ["tsdf", "pc"])
 
+def downsample_to_ratio(pc, target_ratio, tol=0.02, max_iters=20):
+    if target_ratio > 1-1e-3:
+        return pc, None
+    original_size = len(pc.points)
+    target_size = int(original_size * target_ratio)
+
+    # Estimate voxel size bounds (adjust as needed)
+    min_voxel = 0.0001
+    max_voxel = 0.05
+
+    best_voxel = None
+    for _ in range(max_iters):
+        mid_voxel = (min_voxel + max_voxel) / 2.0
+        pc_down = pc.voxel_down_sample(mid_voxel)
+        down_size = len(pc_down.points)
+
+        if abs(down_size - target_size) / target_size < tol:
+            best_voxel = mid_voxel
+            break
+
+        if down_size > target_size:
+            min_voxel = mid_voxel
+        else:
+            max_voxel = mid_voxel
+
+    if best_voxel is None:
+        best_voxel = mid_voxel  # Best effort
+
+    return pc.voxel_down_sample(best_voxel), best_voxel
+
+def remove_percent(pc, dir, frac):
+    min_bounds = pc.get_min_bound()
+    max_bounds = pc.get_max_bound()
+    diff = max_bounds - min_bounds
+    diff_frac = diff*frac
+
+    curr_points = np.array(pc.points)
+
+    if dir == 'X':
+        mask = curr_points[:,0] < diff_frac[0]
+    elif dir == 'Y':
+        mask = curr_points[:,1] < diff_frac[1]
+    elif dir == 'Z':
+        mask = curr_points[:,2] < diff_frac[2]
+    else:
+        raise Exception
+
+    new_points = curr_points[mask]
+    new_points = o3d.utility.Vector3dVector(new_points)
+    pc.points = new_points
+    return pc
+    
+def add_noise(pc, std):
+    curr_points = np.array(pc.points)
+
+    curr_points[:] += np.random.normal(0,std,size=curr_points.shape)
+    new_points = o3d.utility.Vector3dVector(curr_points)
+    pc.points = new_points
+    return pc
+
+def add_random_spheres_to_pcd_fraction(pcd, fraction=0.05, radius=0.02, points_per_sphere=200):
+
+    pts = np.asarray(pcd.points)
+    if len(pts) == 0:
+        raise ValueError("The input point cloud has no points.")
+
+    total_sphere_points = int(len(pts) * fraction)
+    num_spheres = max(1, total_sphere_points // points_per_sphere)
+
+    min_bound = pts.min(axis=0)
+    max_bound = pts.max(axis=0)
+
+    all_points = [pts]
+
+    for _ in range(num_spheres):
+        center = np.random.uniform(min_bound, max_bound)
+
+        phi = np.random.uniform(0, np.pi * 2, points_per_sphere)
+        costheta = np.random.uniform(-1, 1, points_per_sphere)
+        u = np.random.uniform(0, 1, points_per_sphere)
+
+        theta = np.arccos(costheta)
+        r = radius * (u ** (1/3))
+
+        xs = r * np.sin(theta) * np.cos(phi) + center[0]
+        ys = r * np.sin(theta) * np.sin(phi) + center[1]
+        zs = r * np.cos(theta) + center[2]
+
+        sphere_points = np.vstack((xs, ys, zs)).T
+        all_points.append(sphere_points)
+
+    combined_points = np.vstack(all_points)
+
+    pcd_with_spheres = o3d.geometry.PointCloud()
+    pcd_with_spheres.points = o3d.utility.Vector3dVector(combined_points)
+
+    return pcd_with_spheres
 
 def run(
     grasp_plan_fn,
@@ -30,6 +128,11 @@ def run(
     seed=1,
     sim_gui=False,
     rviz=False,
+    downsample_ratio=None,
+    coverage_ratio=None,
+    noise_std=None,
+    artefact_ratio=None,
+    artefact_radius=None,
 ):
     """Run several rounds of simulated clutter removal experiments.
 
@@ -49,13 +152,72 @@ def run(
         consecutive_failures = 1
         last_label = None
 
+        ablations = {
+        "resolution_vox_m": [0.20],
+        "coverage_frac":    [0.60],
+        "noise_sigma_m":    [0.001],
+        "artefact_frac":    [0.1],
+        "cluster_radius_m": 0.02,
+        "seed": 42
+        }
+
+
+        exp_abl = random.randint(0,3)
+        # exp_abl = 1
+        
+        downsample_ratio = None
+        coverage_ratio = None
+        noise_std = None
+        artefact_ratio = None
+        artefact_radius = None
+
+
+
+        if exp_abl == 0:
+            downsample_ratio = random.choice(ablations['resolution_vox_m'])
+        elif exp_abl == 1:
+            coverage_ratio = (random.choice(ablations['coverage_frac']),random.choice(['X','Y','Z']))
+        elif exp_abl == 2:
+            noise_std = random.choice(ablations['noise_sigma_m'])
+        else:
+            artefact_ratio = random.choice(ablations['artefact_frac'])
+            artefact_radius = ablations['cluster_radius_m']
+
+        print("@@@@@@@@@@@",list(ablations.keys())[exp_abl],(downsample_ratio,coverage_ratio,noise_std,artefact_ratio,artefact_radius))
+
         while sim.num_objects > 0 and consecutive_failures < MAX_CONSECUTIVE_FAILURES:
             timings = {}
 
             # scan the scene
             tsdf, pc, timings["integration"] = sim.acquire_tsdf(n=n, N=N)
+            if downsample_ratio is not None:
+                new_pcd, _ = downsample_to_ratio(pc, target_ratio=downsample_ratio)
+                print(f"Original size: ", len(np.array(pc.points)))
+                print(f"New size: ", len(np.array(new_pcd.points)))
+                pc = new_pcd
+            elif coverage_ratio is not None:
+                if len(coverage_ratio) != 2:
+                    raise Exception
+                coverage_percent = coverage_ratio[0]
+                coverage_dir = coverage_ratio[1]
+                new_pcd = remove_percent(pc,coverage_dir,coverage_percent)
+                print(f"Original size: ", len(np.array(pc.points)))
+                print(f"New size: ", len(np.array(new_pcd.points)))
+                pc = new_pcd
+            elif noise_std is not None:
+                new_pcd = add_noise(pc,noise_std)
+                print(f"Original size: ", len(np.array(pc.points)))
+                print(f"New size: ", len(np.array(new_pcd.points)))
+                pc = new_pcd
+            elif artefact_ratio is not None and artefact_radius is not None:
+                new_pcd = add_random_spheres_to_pcd_fraction(pc, artefact_ratio, artefact_radius)
+                print(f"Original size: ", len(np.array(pc.points)))
+                print(f"New size: ", len(np.array(new_pcd.points)))
+                pc = new_pcd
+
 
             if pc.is_empty():
+                print("Empty")
                 break  # empty point cloud, abort this round TODO this should not happen
 
             # visualize scene
@@ -70,6 +232,7 @@ def run(
             grasps, scores, timings["planning"] = grasp_plan_fn(state)
 
             if len(grasps) == 0:
+                print("No grasps")
                 break  # no detections found, abort this round
 
             if rviz:
@@ -89,6 +252,8 @@ def run(
             else:
                 consecutive_failures = 1
             last_label = label
+
+            print("LOOP:",sim.num_objects, consecutive_failures)
 
 
 class Logger(object):

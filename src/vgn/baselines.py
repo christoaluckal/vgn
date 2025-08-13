@@ -10,6 +10,7 @@ from vgn.utils import ros_utils
 from vgn.utils.transform import Rotation, Transform
 
 
+
 class GPD(object):
     def __init__(self):
         self.input_topic = "/cloud_stitched"
@@ -18,6 +19,7 @@ class GPD(object):
 
     def __call__(self, state):
         points = np.asarray(state.pc.points)
+        print(f"GPD call size: {len(points)}")
         msg = ros_utils.to_cloud_msg(points, frame="task")
         self.cloud_pub.publish(msg)
 
