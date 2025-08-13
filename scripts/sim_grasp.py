@@ -29,8 +29,8 @@ def main(args):
     }
 
 
-    # exp_abl = random.randint(0,3)
-    exp_abl = 1
+    exp_abl = random.randint(0,3)
+    # exp_abl = 1
     
     dr = None
     cr = None

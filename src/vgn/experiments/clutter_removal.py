@@ -152,38 +152,38 @@ def run(
         consecutive_failures = 1
         last_label = None
 
-        ablations = {
-        "resolution_vox_m": [0.20],
-        "coverage_frac":    [0.60],
-        "noise_sigma_m":    [0.001],
-        "artefact_frac":    [0.1],
-        "cluster_radius_m": 0.02,
-        "seed": 42
-        }
+        # ablations = {
+        # "resolution_vox_m": [0.20],
+        # "coverage_frac":    [0.60],
+        # "noise_sigma_m":    [0.001],
+        # "artefact_frac":    [0.1],
+        # "cluster_radius_m": 0.02,
+        # "seed": 42
+        # }
 
 
-        exp_abl = random.randint(0,3)
-        # exp_abl = 1
+        # exp_abl = random.randint(0,3)
+        # # exp_abl = 1
         
-        downsample_ratio = None
-        coverage_ratio = None
-        noise_std = None
-        artefact_ratio = None
-        artefact_radius = None
+        # downsample_ratio = None
+        # coverage_ratio = None
+        # noise_std = None
+        # artefact_ratio = None
+        # artefact_radius = None
 
 
 
-        if exp_abl == 0:
-            downsample_ratio = random.choice(ablations['resolution_vox_m'])
-        elif exp_abl == 1:
-            coverage_ratio = (random.choice(ablations['coverage_frac']),random.choice(['X','Y','Z']))
-        elif exp_abl == 2:
-            noise_std = random.choice(ablations['noise_sigma_m'])
-        else:
-            artefact_ratio = random.choice(ablations['artefact_frac'])
-            artefact_radius = ablations['cluster_radius_m']
+        # if exp_abl == 0:
+        #     downsample_ratio = random.choice(ablations['resolution_vox_m'])
+        # elif exp_abl == 1:
+        #     coverage_ratio = (random.choice(ablations['coverage_frac']),random.choice(['X','Y','Z']))
+        # elif exp_abl == 2:
+        #     noise_std = random.choice(ablations['noise_sigma_m'])
+        # else:
+        #     artefact_ratio = random.choice(ablations['artefact_frac'])
+        #     artefact_radius = ablations['cluster_radius_m']
 
-        print("@@@@@@@@@@@",list(ablations.keys())[exp_abl],(downsample_ratio,coverage_ratio,noise_std,artefact_ratio,artefact_radius))
+        # print("@@@@@@@@@@@",list(ablations.keys())[exp_abl],(downsample_ratio,coverage_ratio,noise_std,artefact_ratio,artefact_radius))
 
         while sim.num_objects > 0 and consecutive_failures < MAX_CONSECUTIVE_FAILURES:
             timings = {}
