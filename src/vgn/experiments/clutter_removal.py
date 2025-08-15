@@ -11,6 +11,7 @@ from vgn.grasp import *
 from vgn.simulation import ClutterRemovalSim
 from vgn.utils.transform import Rotation, Transform
 import open3d as o3d
+from vgn.grasp import Grasp
 
 MAX_CONSECUTIVE_FAILURES = 2
 import random
@@ -152,39 +153,6 @@ def run(
         consecutive_failures = 1
         last_label = None
 
-        # ablations = {
-        # "resolution_vox_m": [0.20],
-        # "coverage_frac":    [0.60],
-        # "noise_sigma_m":    [0.001],
-        # "artefact_frac":    [0.1],
-        # "cluster_radius_m": 0.02,
-        # "seed": 42
-        # }
-
-
-        # exp_abl = random.randint(0,3)
-        # # exp_abl = 1
-        
-        # downsample_ratio = None
-        # coverage_ratio = None
-        # noise_std = None
-        # artefact_ratio = None
-        # artefact_radius = None
-
-
-
-        # if exp_abl == 0:
-        #     downsample_ratio = random.choice(ablations['resolution_vox_m'])
-        # elif exp_abl == 1:
-        #     coverage_ratio = (random.choice(ablations['coverage_frac']),random.choice(['X','Y','Z']))
-        # elif exp_abl == 2:
-        #     noise_std = random.choice(ablations['noise_sigma_m'])
-        # else:
-        #     artefact_ratio = random.choice(ablations['artefact_frac'])
-        #     artefact_radius = ablations['cluster_radius_m']
-
-        # print("@@@@@@@@@@@",list(ablations.keys())[exp_abl],(downsample_ratio,coverage_ratio,noise_std,artefact_ratio,artefact_radius))
-
         while sim.num_objects > 0 and consecutive_failures < MAX_CONSECUTIVE_FAILURES:
             timings = {}
 
@@ -233,6 +201,8 @@ def run(
 
             if len(grasps) == 0:
                 print("No grasps")
+                for i in range(sim.num_objects):
+                    logger.log_grasp(round_id, state, timings, [-100,-100,-100], -int(1e5), Label.FAILURE)
                 break  # no detections found, abort this round
 
             if rviz:
@@ -307,9 +277,19 @@ class Logger(object):
         np.savez_compressed(scene_path, grid=tsdf.get_grid(), points=points)
 
         # log grasp
-        qx, qy, qz, qw = grasp.pose.rotation.as_quat()
-        x, y, z = grasp.pose.translation
-        width = grasp.width
+        if type(grasp) != Grasp:
+            qx = -1
+            qy = -1
+            qz = -1
+            qw = -1
+            x = grasp[0]
+            y = grasp[1]
+            z = grasp[2]
+            width = -1
+        else:
+            qx, qy, qz, qw = grasp.pose.rotation.as_quat()
+            x, y, z = grasp.pose.translation
+            width = grasp.width
         label = int(label)
         io.append_csv(
             self.grasps_csv_path,
