@@ -50,6 +50,7 @@ def main(args):
     art = None
     arr = None
     description = "base"
+    base_flag = False
     if exp_idx < len(resolution_exp) and exp_idx >= 0:
         dr = experiment[0]
         description = f'resolution_{dr}'
@@ -64,7 +65,7 @@ def main(args):
         arr = experiment[1]
         description = f'artifact_{art}_{arr}'
     else:
-        pass
+        base_flag = True
 
     print("@@@@@@@@@@@",exp_idx,dr,cr,ns,art,arr)
 
@@ -83,7 +84,8 @@ def main(args):
         coverage_ratio=cr,
         noise_std=ns,
         artefact_ratio=art,
-        artefact_radius=arr
+        artefact_radius=arr,
+        base=base_flag
     )
 
 

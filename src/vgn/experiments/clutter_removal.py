@@ -5,6 +5,7 @@ import uuid
 import numpy as np
 import pandas as pd
 import tqdm
+import os
 
 from vgn import io, vis
 from vgn.grasp import *
@@ -134,6 +135,7 @@ def run(
     noise_std=None,
     artefact_ratio=None,
     artefact_radius=None,
+    base=False
 ):
     """Run several rounds of simulated clutter removal experiments.
 
@@ -144,7 +146,7 @@ def run(
     sim = ClutterRemovalSim(scene, object_set, gui=sim_gui, seed=seed)
     logger = Logger(logdir, description)
 
-    for _ in tqdm.tqdm(range(num_rounds)):
+    for round_ in tqdm.tqdm(range(num_rounds)):
         sim.reset(num_objects)
 
         round_id = logger.last_round_id() + 1
@@ -153,11 +155,20 @@ def run(
         consecutive_failures = 1
         last_label = None
 
+        bpcd_saved = False
+        apcd_saved = False
+
         while sim.num_objects > 0 and consecutive_failures < MAX_CONSECUTIVE_FAILURES:
             timings = {}
 
             # scan the scene
             tsdf, pc, timings["integration"] = sim.acquire_tsdf(n=n, N=N)
+
+            if not bpcd_saved and round_ % 5 == 0:
+                before_pcd_name = f'{description}_{round_}_before.ply'
+                o3d.io.write_point_cloud(os.path.join('/home/caluckal/Developer/summer2025/catkin_ws/src/vgn_real/data/e3d',before_pcd_name),pc)
+                bpcd_saved = True
+
             if downsample_ratio is not None:
                 new_pcd, _ = downsample_to_ratio(pc, target_ratio=downsample_ratio)
                 print(f"Original size: ", len(np.array(pc.points)))
@@ -182,11 +193,19 @@ def run(
                 print(f"Original size: ", len(np.array(pc.points)))
                 print(f"New size: ", len(np.array(new_pcd.points)))
                 pc = new_pcd
+            
 
 
             if pc.is_empty():
                 print("Empty")
                 break  # empty point cloud, abort this round TODO this should not happen
+
+            if not apcd_saved and round_ % 5 == 0 and not base:
+                # before_pcd_name = f'{description}_{round_}_before.ply'
+                # o3d.io.write_point_cloud(os.path.join('/home/caluckal/Developer/summer2025/catkin_ws/src/vgn_real/data/e3d',before_pcd_name),pc)
+                after_pcd_name = f'{description}_{round_}_after.ply'
+                o3d.io.write_point_cloud(os.path.join('/home/caluckal/Developer/summer2025/catkin_ws/src/vgn_real/data/e3d',after_pcd_name),new_pcd)
+                apcd_saved = True
 
             # visualize scene
             if rviz:

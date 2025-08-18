@@ -21,7 +21,9 @@ exps = resolution_exp + coverage_exp + noise_exp + art_exp
 
 
 exp_range = len(exps)
+# exp_range = 5
 for i in range(-1,exp_range):
+# for i in range(-1,20):
     try:
         process = subprocess.run(f"catkin build vgn && python scripts/sim_grasp.py --model gpd --sim-gui --idx {i}", shell=True)
     except Exception as e:
